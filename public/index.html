@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HireScout: research a company before you apply</title>
+<style>
+  :root{
+    --bg:#f3f5f7; --panel:#ffffff; --ink:#142033; --muted:#5b6778; --line:#dde2e8;
+    --accent:#0b6e6e; --accent-soft:#e0f0ef; --warn:#8a5a00; --warn-bg:#fff4dc;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f1620; --panel:#17212e; --ink:#e8edf3; --muted:#9aa7b8; --line:#2a3646;
+      --accent:#4cc3bd; --accent-soft:#16363a; --warn:#f0c36a; --warn-bg:#3a2f14; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{max-width:1100px;margin:0 auto;padding:40px 20px 8px}
+  h1{font:700 2.2rem/1.15 Georgia,"Times New Roman",serif;margin:0 0 8px;letter-spacing:-.01em}
+  header p{margin:0;color:var(--muted);max-width:60ch}
+  form{max-width:1100px;margin:24px auto 0;padding:0 20px;display:grid;gap:12px;grid-template-columns:2fr 2fr 2fr auto;align-items:end}
+  label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+  input[type=text]{padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+  input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  button{padding:11px 20px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:600 1rem system-ui;cursor:pointer}
+  @media (prefers-color-scheme:dark){button{color:#06201f}}
+  button:disabled{opacity:.6;cursor:wait}
+  .opts{max-width:1100px;margin:10px auto 0;padding:0 20px;color:var(--muted);font-size:.9rem}
+  main{max-width:1100px;margin:24px auto 60px;padding:0 20px;display:grid;gap:18px;grid-template-columns:1.4fr 1fr}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  section.wide{grid-column:1 / -1}
+  h2{font:700 1.1rem Georgia,serif;margin:0 0 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .tag{font:500 .75rem system-ui;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:99px}
+  .item{padding:12px 0;border-top:1px solid var(--line)}
+  .item:first-of-type{border-top:0;padding-top:0}
+  .item a{color:var(--ink);font-weight:600;text-decoration:none}
+  .item a:hover{color:var(--accent);text-decoration:underline}
+  .meta{color:var(--muted);font-size:.86rem;margin-top:2px}
+  .snip{font-size:.92rem;margin-top:6px;color:var(--muted)}
+  .err{background:var(--warn-bg);color:var(--warn);padding:10px 12px;border-radius:8px;font-size:.92rem}
+  .empty{color:var(--muted);font-size:.95rem}
+  .qa b{display:block}
+  #status{max-width:1100px;margin:18px auto 0;padding:0 20px;color:var(--muted)}
+  footer{max-width:1100px;margin:0 auto 40px;padding:0 20px;color:var(--muted);font-size:.85rem}
+  @media (max-width:820px){form{grid-template-columns:1fr}main{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Research a company before you apply</h1>
+  <p>Enter a company and a role. HireScout pulls live openings, recent news, and what candidates say about the interview and pay, all from Google via SerpApi.</p>
+</header>
+
+<form id="f">
+  <label>Company <input type="text" id="company" placeholder="e.g. Persistent Systems" required></label>
+  <label>Role <input type="text" id="role" value="software engineer"></label>
+  <label>Location <input type="text" id="location" value="Pune, Maharashtra, India"></label>
+  <button id="go" type="submit">Get brief</button>
+</form>
+<div class="opts"><label style="display:inline-flex;gap:8px;align-items:center"><input type="checkbox" id="fresher" checked> Show fresher and entry-level openings</label></div>
+<div id="status" role="status" aria-live="polite"></div>
+<main id="out" hidden></main>
+<footer>Data from Google Jobs, Google News and Google Search through SerpApi. Results are cached for 6 hours to save search credits.</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? esc(u) : "#";
+const cachedTag = (c) => c ? '<span class="tag">cached</span>' : '<span class="tag">live</span>';
+
+function jobsHtml(b){
+  if (b.error) return `<div class="err">Could not load jobs: ${esc(b.error)}</div>`;
+  if (!b.items.length) return '<p class="empty">No openings found. Try a broader role or a different city.</p>';
+  return b.items.map(j => `<div class="item">
+    <a href="${safeUrl(j.link)}" target="_blank" rel="noopener">${esc(j.title)}</a>
+    <div class="meta">${esc(j.company)} · ${esc(j.location)}${j.posted ? " · " + esc(j.posted) : ""}${j.type ? " · " + esc(j.type) : ""}${j.via ? " · " + esc(j.via) : ""}</div>
+    <div class="snip">${esc(j.snippet)}…</div></div>`).join("");
+}
+function newsHtml(b){
+  if (b.error) return `<div class="err">Could not load news: ${esc(b.error)}</div>`;
+  if (!b.items.length) return '<p class="empty">No recent news found.</p>';
+  return b.items.map(n => `<div class="item"><a href="${safeUrl(n.link)}" target="_blank" rel="noopener">${esc(n.title)}</a>
+    <div class="meta">${esc(n.source)}${n.date ? " · " + esc(n.date) : ""}</div></div>`).join("");
+}
+function insightsHtml(b){
+  if (b.error) return `<div class="err">Could not load insights: ${esc(b.error)}</div>`;
+  let h = "";
+  if (b.questions?.length) h += b.questions.map(q => `<div class="item qa"><b>${esc(q.question)}</b><div class="snip">${esc(q.answer)}</div></div>`).join("");
+  if (b.items.length) h += b.items.map(o => `<div class="item"><a href="${safeUrl(o.link)}" target="_blank" rel="noopener">${esc(o.title)}</a>
+    <div class="meta">${esc(o.source)}</div><div class="snip">${esc(o.snippet)}</div></div>`).join("");
+  return h || '<p class="empty">No interview or salary results found.</p>';
+}
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const p = new URLSearchParams({
+    company: $("company").value, role: $("role").value, location: $("location").value,
+    fresher: $("fresher").checked ? "1" : "0",
+  });
+  $("go").disabled = true; $("status").textContent = "Searching Google Jobs, News and Search…"; $("out").hidden = true;
+  try {
+    const r = await fetch("/api/brief?" + p);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Request failed");
+    $("out").innerHTML = `
+      <section><h2>Open roles ${cachedTag(d.jobs.cached)}</h2>${jobsHtml(d.jobs)}</section>
+      <section><h2>Latest news ${cachedTag(d.news.cached)}</h2>${newsHtml(d.news)}</section>
+      <section class="wide"><h2>Interview process and pay, from the web ${cachedTag(d.insights.cached)}</h2>${insightsHtml(d.insights)}</section>`;
+    $("out").hidden = false;
+    $("status").textContent = `Brief for ${d.company}`;
+  } catch (err) {
+    $("status").innerHTML = `<div class="err">${esc(err.message)}</div>`;
+  } finally { $("go").disabled = false; }
+});
+</script>
+</body>
+</html>
