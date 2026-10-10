@@ -42,13 +42,43 @@
   .qa b{display:block}
   #status{max-width:1100px;margin:18px auto 0;padding:0 20px;color:var(--muted)}
   footer{max-width:1100px;margin:0 auto 40px;padding:0 20px;color:var(--muted);font-size:.85rem}
+
+  .score{display:grid;grid-template-columns:auto 1fr 1fr;gap:28px;align-items:center}
+  .ring{position:relative;width:132px;height:132px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .num{position:absolute;inset:0;display:grid;place-items:center;font:700 2.1rem Georgia,serif}
+  .ring .lbl{display:block;text-align:center;margin-top:6px;font-weight:600;font-size:.9rem}
+  .bar{margin:7px 0;font-size:.85rem;color:var(--muted)}
+  .bar i{display:block;height:7px;border-radius:99px;background:var(--line);margin-top:3px;overflow:hidden}
+  .bar i b{display:block;height:100%;background:var(--accent);border-radius:99px}
+  .flags{font-size:.9rem}
+  .flags div{padding:3px 0}
+  .flags .g::before{content:"+ ";color:var(--accent);font-weight:700}
+  .flags .r::before{content:"! ";color:#c2410c;font-weight:700}
+  .flags a{color:inherit}
+  .note{font-size:.8rem;color:var(--muted);margin-top:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{padding:5px 11px;border-radius:99px;border:1px solid var(--line);font-size:.9rem}
+  .chip small{color:var(--muted);margin-left:4px}
+  .chip.have{background:var(--accent-soft);border-color:var(--accent)}
+  .chip.miss{border-style:dashed}
+  .skillbar{display:flex;gap:12px;align-items:end;margin-bottom:14px}
+  .skillbar label{flex:1}
+  .match{font:700 1.4rem Georgia,serif;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;font-size:.95rem}
+  th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500}
+  td.win{font-weight:700;color:var(--accent)}
+  .rev{padding:10px 0;border-top:1px solid var(--line);font-size:.92rem}
+  .stars{color:var(--warn)}
+  @media (max-width:820px){.score{grid-template-columns:1fr}}
   @media (max-width:820px){form{grid-template-columns:1fr}main{grid-template-columns:1fr}h1{font-size:1.8rem}}
 </style>
 </head>
 <body>
 <header>
   <h1>Research a company before you apply</h1>
-  <p>Enter a company and a role. HireScout pulls live openings, recent news, and what candidates say about the interview and pay, all from Google via SerpApi.</p>
+  <p>Enter a company and a role. HireScout turns live Google data from SerpApi into a Scout Score, the skills to learn, office reviews and interview insights, so you can compare employers before you apply.</p>
 </header>
 
 <form id="f">
@@ -57,10 +87,14 @@
   <label>Location <input type="text" id="location" value="Pune, Maharashtra, India"></label>
   <button id="go" type="submit">Get brief</button>
 </form>
+<form id="f2" onsubmit="return false" style="grid-template-columns:2fr 2fr;margin-top:12px">
+  <label>Your skills (comma separated, optional) <input type="text" id="skills" placeholder="java, react, mongodb, python"></label>
+  <label>Compare with another company (optional) <input type="text" id="compare" placeholder="e.g. Zensar"></label>
+</form>
 <div class="opts"><label style="display:inline-flex;gap:8px;align-items:center"><input type="checkbox" id="fresher" checked> Show fresher and entry-level openings</label></div>
 <div id="status" role="status" aria-live="polite"></div>
 <main id="out" hidden></main>
-<footer>Data from Google Jobs, Google News and Google Search through SerpApi. Results are cached for 6 hours to save search credits.</footer>
+<footer>Data from Google Jobs, Google News, Google Maps and Google Search through SerpApi. Results are cached for 6 hours to save search credits.<span id="credits"></span></footer>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -91,26 +125,99 @@ function insightsHtml(b){
   return h || '<p class="empty">No interview or salary results found.</p>';
 }
 
+
+const COLOR = (n) => n >= 70 ? "#0b9d78" : n >= 45 ? "#d99a1b" : "#c2410c";
+function scoreHtml(s, company){
+  const c = 2 * Math.PI * 54, off = c * (1 - s.total / 100);
+  const P = s.parts;
+  const bar = (name, v, max) => `<div class="bar">${name}: ${v}/${max}<i><b style="width:${(v/max)*100}%"></b></i></div>`;
+  const fl = (arr, cls) => arr.map(f => `<div class="${cls}">${f.link ? `<a href="${safeUrl(f.link)}" target="_blank" rel="noopener">${esc(f.text)}</a>` : esc(f.text)}</div>`).join("");
+  return `<div class="score">
+    <div><div class="ring"><svg width="132" height="132"><circle cx="66" cy="66" r="54" fill="none" stroke="var(--line)" stroke-width="12"/>
+      <circle cx="66" cy="66" r="54" fill="none" stroke="${COLOR(s.total)}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
+      <div class="num">${s.total}</div></div><span class="lbl">${esc(s.label)}</span></div>
+    <div>${bar("Hiring activity", P.hiring, 35)}${bar("Fresher-friendly openings", P.fresher, 25)}${bar("Office rating (Google Maps)", P.office, 20)}${bar("News momentum", P.news, 20)}</div>
+    <div class="flags">${fl(s.green, "g")}${fl(s.red, "r")}${!s.green.length && !s.red.length ? '<span class="empty">No strong flags either way.</span>' : ""}</div>
+  </div>
+  <p class="note">Scout Score is a simple heuristic built only from the live SerpApi results on this page (jobs, maps and news). Treat it as a starting point, not a verdict.${s.partial ? " Some data failed to load, so the score may be low." : ""}</p>`;
+}
+function skillsHtml(list){
+  if (!list.length) return '<p class="empty">No skills could be extracted from these openings.</p>';
+  const mine = $("skills").value.toLowerCase().split(",").map(x => x.trim()).filter(x => x.length > 1);
+  const has = (n) => mine.some(u => n.toLowerCase().includes(u) || u.includes(n.toLowerCase()));
+  const hv = mine.length ? list.filter(s => has(s.name)).length : 0;
+  const pct = mine.length ? Math.round(100 * hv / list.length) : null;
+  const chips = list.map(s => `<span class="chip ${mine.length ? (has(s.name) ? "have" : "miss") : ""}">${esc(s.name)}<small>${s.count} job${s.count > 1 ? "s" : ""}</small></span>`).join("");
+  return `${pct !== null ? `<div class="skillbar"><div class="match">${pct}% match</div><div class="meta">You have ${hv} of the ${list.length} most requested skills. Dashed chips are what to learn next.</div></div>` : '<p class="meta" style="margin:0 0 10px">Add your skills above to see your match and what to learn next.</p>'}
+    <div class="chips">${chips}</div>`;
+}
+function officeHtml(o){
+  if (o.error) return `<div class="err">Could not load office data: ${esc(o.error)}</div>`;
+  if (!o.items.length) return '<p class="empty">No office found on Google Maps for this city.</p>';
+  const places = o.items.map(p => `<div class="item"><a href="${safeUrl(p.link)}" target="_blank" rel="noopener">${esc(p.name)}</a>
+    <div class="meta">${p.rating ? "★ " + esc(p.rating) + (p.reviews ? " (" + esc(p.reviews) + " reviews)" : "") + " · " : ""}${esc(p.address)}</div></div>`).join("");
+  const revs = o.reviews.length ? o.reviews.map(r => `<div class="rev"><span class="stars">${"★".repeat(r.rating || 0)}</span> <span class="meta">${esc(r.user)} · ${esc(r.date)}</span><div>${esc(r.text)}</div></div>`).join("")
+    : '<p class="empty">No written reviews available for the top location.</p>';
+  return `<div class="item" style="border:0;padding:0"><h2 style="font-size:1rem">Offices</h2>${places}</div>
+    <h2 style="font-size:1rem;margin-top:16px">Recent Google Maps reviews of the top location</h2>${revs}
+    <p class="note">These are public Maps reviews from visitors and staff mixed together, so read them as one signal.</p>`;
+}
+function compareHtml(a, b){
+  const row = (name, va, vb, higher = true) => {
+    const na = parseFloat(va), nb = parseFloat(vb);
+    const wa = !isNaN(na) && !isNaN(nb) && na !== nb && (higher ? na > nb : na < nb);
+    const wb = !isNaN(na) && !isNaN(nb) && na !== nb && !wa;
+    return `<tr><th>${name}</th><td class="${wa ? "win" : ""}">${esc(va)}</td><td class="${wb ? "win" : ""}">${esc(vb)}</td></tr>`;
+  };
+  const top = (d) => d.skills.slice(0, 5).map(s => s.name).join(", ") || "n/a";
+  const fs = (d) => Math.round((d.jobs.stats?.fresherShare || 0) * 100) + "%";
+  return `<table><tr><th></th><th>${esc(a.company)}</th><th>${esc(b.company)}</th></tr>
+    ${row("Scout Score", a.score.total, b.score.total)}
+    ${row("Openings found", a.jobs.stats?.count || 0, b.jobs.stats?.count || 0)}
+    ${row("Fresher-friendly openings", fs(a), fs(b))}
+    ${row("Office rating", a.score.rating ?? "n/a", b.score.rating ?? "n/a")}
+    <tr><th>Most requested skills</th><td>${esc(top(a))}</td><td>${esc(top(b))}</td></tr></table>`;
+}
+
+const qs = (company) => new URLSearchParams({
+  company, role: $("role").value, location: $("location").value, fresher: $("fresher").checked ? "1" : "0" });
+async function brief(company){
+  const r = await fetch("/api/brief?" + qs(company));
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Request failed");
+  return d;
+}
+
 $("f").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const p = new URLSearchParams({
-    company: $("company").value, role: $("role").value, location: $("location").value,
-    fresher: $("fresher").checked ? "1" : "0",
-  });
-  $("go").disabled = true; $("status").textContent = "Searching Google Jobs, News and Search…"; $("out").hidden = true;
+  const other = $("compare").value.trim();
+  $("go").disabled = true; $("status").textContent = "Searching Google Jobs, News, Maps and Search…"; $("out").hidden = true;
   try {
-    const r = await fetch("/api/brief?" + p);
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || "Request failed");
+    const d = await brief($("company").value);
+    let cmp = "";
+    if (other) {
+      $("status").textContent = `Comparing with ${other}…`;
+      try { const d2 = await brief(other); cmp = `<section class="wide"><h2>Head to head</h2>${compareHtml(d, d2)}</section>`; }
+      catch (err) { cmp = `<section class="wide"><div class="err">Comparison failed: ${esc(err.message)}</div></section>`; }
+    }
     $("out").innerHTML = `
+      <section class="wide"><h2>Scout Score for ${esc(d.company)}</h2>${scoreHtml(d.score, d.company)}</section>
+      ${cmp}
+      <section class="wide"><h2>Skills employers ask for here</h2><div id="skillsPanel">${skillsHtml(d.skills)}</div></section>
       <section><h2>Open roles ${cachedTag(d.jobs.cached)}</h2>${jobsHtml(d.jobs)}</section>
       <section><h2>Latest news ${cachedTag(d.news.cached)}</h2>${newsHtml(d.news)}</section>
+      <section class="wide"><h2>Office and employee voice ${cachedTag(d.office.cached)}</h2>${officeHtml(d.office)}</section>
       <section class="wide"><h2>Interview process and pay, from the web ${cachedTag(d.insights.cached)}</h2>${insightsHtml(d.insights)}</section>`;
+    window.__lastSkills = d.skills;
     $("out").hidden = false;
     $("status").textContent = `Brief for ${d.company}`;
+    fetch("/api/credits").then(r => r.json()).then(c => { if (c.left != null) $("credits").textContent = ` SerpApi searches left this month: ${c.left}.`; }).catch(() => {});
   } catch (err) {
     $("status").innerHTML = `<div class="err">${esc(err.message)}</div>`;
   } finally { $("go").disabled = false; }
+});
+$("skills").addEventListener("input", () => {
+  if (window.__lastSkills) document.getElementById("skillsPanel").innerHTML = skillsHtml(window.__lastSkills);
 });
 </script>
 </body>
