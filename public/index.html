@@ -119,7 +119,7 @@ function newsHtml(b){
 function insightsHtml(b){
   if (b.error) return `<div class="err">Could not load insights: ${esc(b.error)}</div>`;
   let h = "";
-  if (b.questions?.length) h += b.questions.map(q => `<div class="item qa"><b>${esc(q.question)}</b><div class="snip">${esc(q.answer)}</div></div>`).join("");
+  if (b.questions?.length) h += b.questions.map(q => `<div class="item qa"><b>${esc(q.question)}</b>${q.answer ? `<div class="snip">${esc(q.answer.slice(0, 300))}</div>` : ""}${q.link ? `<div class="meta"><a href="${safeUrl(q.link)}" target="_blank" rel="noopener">Source</a></div>` : ""}</div>`).join("");
   if (b.items.length) h += b.items.map(o => `<div class="item"><a href="${safeUrl(o.link)}" target="_blank" rel="noopener">${esc(o.title)}</a>
     <div class="meta">${esc(o.source)}</div><div class="snip">${esc(o.snippet)}</div></div>`).join("");
   return h || '<p class="empty">No interview or salary results found.</p>';

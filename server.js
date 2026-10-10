@@ -113,8 +113,12 @@ async function getInsights({ company, role }) {
     items: (data.organic_results || []).slice(0, 6).map((o) => ({
       title: o.title, link: o.link, source: o.displayed_link, snippet: o.snippet,
     })),
-    questions: (data.related_questions || []).slice(0, 5).map((r) => ({
-      question: r.question, answer: r.snippet || r.list?.join("; "), link: r.link,
+        questions: (data.related_questions || []).slice(0, 5).map((r) => ({
+      question: r.question,
+      answer: r.snippet || r.answer ||
+        r.text_blocks?.map((b) => b.snippet || (b.list || []).map((i) => i.snippet || i).join("; ")).filter(Boolean).join(" ") ||
+        r.list?.join("; "),
+      link: r.link,
     })),
     cached,
   };
